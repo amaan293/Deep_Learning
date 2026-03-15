@@ -120,9 +120,7 @@ def experiment_learning_rate():
     
     ax1 = axes[0]
     create_contour_plot(ax1, (-6, 6), (-6, 6))
-    
-    # Plot green first (bottom), then red and blue on top
-    # Green thin and transparent, red and blue thick and solid
+
     for lr, result, color in results:
         if color == 'green':
             ax1.plot(result['x_trajectory'], result['y_trajectory'], 
