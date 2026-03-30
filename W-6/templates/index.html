@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NN Optimizer Visualization — California Housing</title>
+
+  <!-- Chart.js for all plots -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* ── base ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ── header ───────────────────────────────────────────────────── */
+    header {
+      background: #1a1d2e;
+      border-bottom: 1px solid #2d3154;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    header h1 { font-size: 18px; font-weight: 600; color: #e2e8f0; }
+    header p  { font-size: 12px; color: #7c85b3; font-family: monospace; margin-top: 2px; }
+
+    .arch-badge {
+      background: #252a45;
+      border: 1px solid #3a4170;
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-family: monospace;
+      color: #a5b4fc;
+    }
+
+    /* ── layout ───────────────────────────────────────────────────── */
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: calc(100vh - 61px);
+    }
+
+    /* ── sidebar ──────────────────────────────────────────────────── */
+    .sidebar {
+      background: #13162a;
+      border-right: 1px solid #2d3154;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+      overflow-y: auto;
+    }
+
+    .sb-section { display: flex; flex-direction: column; gap: 10px; }
+
+    .sb-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #4a5080;
+    }
+
+    /* optimizer cards */
+    .opt-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .opt-card:hover { background: #1e2240; }
+    .opt-card.active {
+      background: #1e2240;
+      border-color: #4f5fcc;
+    }
+    .opt-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .opt-info { flex: 1; }
+    .opt-name { font-size: 13px; font-weight: 600; }
+    .opt-desc { font-size: 11px; color: #6b7399; margin-top: 1px; line-height: 1.4; }
+
+    /* controls */
+    .ctrl-group { display: flex; flex-direction: column; gap: 5px; }
+    .ctrl-group label { font-size: 11px; color: #6b7399; }
+
+    select, input[type=range] {
+      width: 100%;
+      background: #1e2240;
+      border: 1px solid #3a4170;
+      border-radius: 7px;
+      color: #e2e8f0;
+      padding: 6px 10px;
+      font-size: 13px;
+      outline: none;
+      cursor: pointer;
+    }
+    select:focus { border-color: #4f5fcc; }
+    input[type=range] { padding: 4px 0; accent-color: #4f5fcc; }
+
+    .lr-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .lr-row input { flex: 1; }
+    .lr-val {
+      font-family: monospace;
+      font-size: 12px;
+      color: #a5b4fc;
+      min-width: 48px;
+      text-align: right;
+    }
+
+    /* buttons */
+    .btn-row { display: flex; flex-direction: column; gap: 8px; }
+
+    button {
+      padding: 9px 16px;
+      border-radius: 8px;
+      border: 1px solid #3a4170;
+      background: transparent;
+      color: #e2e8f0;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+      width: 100%;
+    }
+    button:hover  { background: #1e2240; }
+    button.primary {
+      background: #3d4bcc;
+      border-color: #3d4bcc;
+      color: #fff;
+    }
+    button.primary:hover { background: #4f5fcc; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* stat cards */
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat {
+      background: #1a1d2e;
+      border: 1px solid #2d3154;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .stat-label { font-size: 10px; color: #4a5080; margin-bottom: 3px; }
+    .stat-val   { font-size: 16px; font-weight: 600; font-family: monospace; color: #a5b4fc; }
+
+    /* weight log */
+    .weight-log {
+      background: #1a1d2e;
+      border: 1px solid #2d3154;
+      border-radius: 8px;
+      padding: 8px;
+      font-family: monospace;
+      font-size: 10px;
+      color: #6b7399;
+      max-height: 120px;
+      overflow-y: auto;
+      line-height: 1.6;
+    }
+
+    /* ── main content ─────────────────────────────────────────────── */
+    .content {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .chart-card {
+      background: #1a1d2e;
+      border: 1px solid #2d3154;
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .chart-card.full { grid-column: 1 / -1; }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #c4cdf5;
+    }
+    .card-sub {
+      font-size: 11px;
+      color: #4a5080;
+      margin-top: 2px;
+    }
+
+    /* weight picker inside surface card */
+    .weight-picker {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .weight-picker label { font-size: 11px; color: #6b7399; }
+    .weight-picker select {
+      padding: 4px 8px;
+      font-size: 11px;
+      width: auto;
+      min-width: 160px;
+    }
+
+    canvas { display: block; width: 100% !important; }
+
+    /* surface canvas gets fixed height */
+    #surfaceCanvas { height: 300px !important; }
+    #lossCanvas    { height: 180px !important; }
+    #scatterCanvas { height: 280px !important; }
+    #weightCanvas  { height: 220px !important; }
+
+    /* ── surface legend ───────────────────────────────────────────── */
+    .surface-legend {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: #4a5080;
+      margin-top: 8px;
+    }
+    .grad-bar {
+      flex: 1;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(to right, #1a237e, #1565c0, #0288d1, #26a69a, #66bb6a, #ffee58, #ff7043, #b71c1c);
+    }
+
+    /* ── status bar ───────────────────────────────────────────────── */
+    .status-bar {
+      background: #13162a;
+      border-top: 1px solid #2d3154;
+      padding: 6px 20px;
+      font-size: 11px;
+      font-family: monospace;
+      color: #4a5080;
+      display: flex;
+      gap: 20px;
+    }
+    .status-bar span { color: #6b7399; }
+    .status-bar b { color: #a5b4fc; }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #2d3154; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════ HEADER -->
+<header>
+  <div>
+    <h1>Neural Network Regression — Optimizer Visualization</h1>
+    <p>Dataset: California Housing · Features: MedInc, AveRooms · Target: MedHouseVal</p>
+  </div>
+  <div class="arch-badge">2 → 6 (tanh) → 1 (linear) · MSE Loss</div>
+</header>
+
+<div class="layout">
+
+  <!-- ═══════════════════════════════════════════ SIDEBAR -->
+  <aside class="sidebar">
+
+    <!-- Optimizer selector -->
+    <div class="sb-section">
+      <div class="sb-label">Select Optimizer</div>
+      <div class="opt-card active" data-opt="sgd">
+        <div class="opt-dot" style="background:#ff5c5c"></div>
+        <div class="opt-info">
+          <div class="opt-name">SGD</div>
+          <div class="opt-desc">w ← w − lr·g · No memory, no adaptation</div>
+        </div>
+      </div>
+      <div class="opt-card" data-opt="momentum">
+        <div class="opt-dot" style="background:#5b8fff"></div>
+        <div class="opt-info">
+          <div class="opt-name">Momentum</div>
+          <div class="opt-desc">v ← β·v + lr·g · Accelerates consistent directions</div>
+        </div>
+      </div>
+      <div class="opt-card" data-opt="adagrad">
+        <div class="opt-dot" style="background:#3ecf8e"></div>
+        <div class="opt-info">
+          <div class="opt-name">Adagrad</div>
+          <div class="opt-desc">G ← G + g² · Shrinks lr for frequent weights</div>
+        </div>
+      </div>
+      <div class="opt-card" data-opt="rmsprop">
+        <div class="opt-dot" style="background:#ffa640"></div>
+        <div class="opt-info">
+          <div class="opt-name">RMSprop</div>
+          <div class="opt-desc">v ← ρ·v + (1-ρ)·g² · Fixes Adagrad decay</div>
+        </div>
+      </div>
+      <div class="opt-card" data-opt="adam">
+        <div class="opt-dot" style="background:#c084fc"></div>
+        <div class="opt-info">
+          <div class="opt-name">Adam</div>
+          <div class="opt-desc">m̂/√v̂ · Momentum + RMSprop combined</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Learning rate -->
+    <div class="sb-section">
+      <div class="sb-label">Learning Rate</div>
+      <div class="ctrl-group">
+        <div class="lr-row">
+          <input type="range" id="lrSlider" min="-5" max="-1" step="0.1" value="-2" />
+          <span class="lr-val" id="lrDisplay">0.01</span>
+        </div>
+        <label>log scale: 10^x</label>
+      </div>
+    </div>
+
+    <!-- Training controls -->
+    <div class="sb-section">
+      <div class="sb-label">Training</div>
+      <div class="ctrl-group">
+        <label>Epochs per step</label>
+        <select id="epochStep">
+          <option value="1">1 epoch</option>
+          <option value="5">5 epochs</option>
+          <option value="10" selected>10 epochs</option>
+          <option value="50">50 epochs</option>
+          <option value="100">100 epochs</option>
+        </select>
+      </div>
+      <div class="btn-row" style="margin-top:4px">
+        <button class="primary" id="btnTrain">▶ Start Training</button>
+        <button id="btnStep">Step Once</button>
+        <button id="btnReset">↺ Reset</button>
+      </div>
+    </div>
+
+    <!-- Live stats -->
+    <div class="sb-section">
+      <div class="sb-label">Live Stats</div>
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-label">EPOCH</div>
+          <div class="stat-val" id="statEpoch">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">MSE LOSS</div>
+          <div class="stat-val" id="statLoss">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">OPTIMIZER</div>
+          <div class="stat-val" id="statOpt" style="font-size:12px;padding-top:3px">SGD</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">LR</div>
+          <div class="stat-val" id="statLR">0.01</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Real-time weight log -->
+    <div class="sb-section">
+      <div class="sb-label">Real-time Weight Updates</div>
+      <div class="weight-log" id="weightLog">Waiting for training to start...</div>
+    </div>
+
+  </aside>
+
+  <!-- ═══════════════════════════════════════════ MAIN -->
+  <main class="content">
+
+    <div class="charts-grid">
+
+      <!-- Loss surface -->
+      <div class="chart-card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Loss Surface (2D slice)</div>
+            <div class="card-sub">Heatmap of MSE over 2 selected weights · trajectory = optimizer path</div>
+          </div>
+        </div>
+        <!-- User picks which 2 weights to show -->
+        <div class="weight-picker" style="margin-bottom:10px">
+          <label>X axis (weight i):</label>
+          <select id="wi_sel"></select>
+          <label>Y axis (weight j):</label>
+          <select id="wj_sel"></select>
+          <button id="btnSurface" style="width:auto;padding:4px 12px;font-size:11px">Compute</button>
+        </div>
+        <canvas id="surfaceCanvas"></canvas>
+        <div class="surface-legend">
+          <span>Low loss</span>
+          <div class="grad-bar"></div>
+          <span>High loss</span>
+        </div>
+      </div>
+
+      <!-- Scatter: true vs predicted -->
+      <div class="chart-card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Prediction vs Ground Truth</div>
+            <div class="card-sub">Perfect model = dots on diagonal · updates every step</div>
+          </div>
+        </div>
+        <canvas id="scatterCanvas"></canvas>
+      </div>
+
+      <!-- Loss curve — full width -->
+      <div class="chart-card full">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Training Loss (MSE) over Epochs</div>
+            <div class="card-sub">Watch the curve descend as the network learns</div>
+          </div>
+        </div>
+        <canvas id="lossCanvas"></canvas>
+      </div>
+
+      <!-- Weight evolution -->
+      <div class="chart-card full">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Weight Values over Training Steps</div>
+            <div class="card-sub">Each line = one weight · shows real-time updates to all 25 parameters</div>
+          </div>
+        </div>
+        <canvas id="weightCanvas"></canvas>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- status bar -->
+<div class="status-bar">
+  <span>Status: <b id="statusText">Ready</b></span>
+  <span>Dataset: <b>California Housing · 500 samples · 2 features</b></span>
+  <span>Architecture: <b>2 → 6 (tanh) → 1 (linear)</b></span>
+  <span>Loss: <b>MSE</b></span>
+</div>
+
+
+<script>
+
+// ── optimizer colors ──────────────────────────────────────────────────────────
+const OPT_COLORS = {
+  sgd:      '#ff5c5c',
+  momentum: '#5b8fff',
+  adagrad:  '#3ecf8e',
+  rmsprop:  '#ffa640',
+  adam:     '#c084fc',
+};
+
+// ── state ─────────────────────────────────────────────────────────────────────
+let currentOpt  = 'sgd';
+let isTraining  = false;
+let trainHandle = null;
+let weightLabels = [];       // filled from /api/info
+let lossHistory  = [];
+let weightHistory = [];      // array of flat weight arrays over time
+
+// ── Chart.js defaults ─────────────────────────────────────────────────────────
+Chart.defaults.color = '#6b7399';
+Chart.defaults.borderColor = '#2d3154';
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+
+// ── helper: draw surface as image on a raw canvas ─────────────────────────────
+const surfaceCanvas = document.getElementById('surfaceCanvas');
+const surfCtx       = surfaceCanvas.getContext('2d');
+
+// Loss-to-colour mapping (cool-to-warm)
+function lossToRGB(norm) {
+  // norm in [0, 1], 0 = low (blue), 1 = high (red)
+  const t = Math.pow(norm, 0.45);  // gamma compress so low values are visible
+  const stops = [
+    [0.00, [26, 35, 126]],
+    [0.25, [2, 136, 209]],
+    [0.50, [38, 166, 154]],
+    [0.70, [255, 238, 88]],
+    [0.85, [255, 112, 67]],
+    [1.00, [183, 28, 28]],
+  ];
+  let lo = stops[0], hi = stops[stops.length - 1];
+  for (let k = 0; k < stops.length - 1; k++) {
+    if (t >= stops[k][0] && t <= stops[k + 1][0]) { lo = stops[k]; hi = stops[k + 1]; break; }
+  }
+  const f = (t - lo[0]) / (hi[0] - lo[0] + 1e-9);
+  const r = Math.round(lo[1][0] + f * (hi[1][0] - lo[1][0]));
+  const g = Math.round(lo[1][1] + f * (hi[1][1] - lo[1][1]));
+  const b = Math.round(lo[1][2] + f * (hi[1][2] - lo[1][2]));
+  return [r, g, b];
+}
+
+let currentSurface = null;  // cache last computed surface data
+
+function drawSurface(data) {
+  // data: { surface (2D array), wi_vals, wj_vals, traj_i, traj_j, wi_label, wj_label, current }
+  currentSurface = data;
+  const grid = data.surface;
+  const n = grid.length;
+  const m = grid[0].length;
+
+  // Resize canvas to actual display size
+  const W = surfaceCanvas.offsetWidth || 420;
+  const H = surfaceCanvas.offsetHeight || 300;
+  surfaceCanvas.width  = W;
+  surfaceCanvas.height = H;
+
+  const PAD = { top: 20, right: 20, bottom: 40, left: 50 };
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top  - PAD.bottom;
+
+  const cellW = plotW / m;
+  const cellH = plotH / n;
+
+  // Normalize loss values to [0,1]
+  let lmin = Infinity, lmax = -Infinity;
+  grid.forEach(row => row.forEach(v => { lmin = Math.min(lmin, v); lmax = Math.max(lmax, v); }));
+
+  // Draw heatmap cells
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < m; j++) {
+      const norm = (grid[i][j] - lmin) / (lmax - lmin + 1e-9);
+      const [r, g, b] = lossToRGB(norm);
+      surfCtx.fillStyle = `rgb(${r},${g},${b})`;
+      // i=0 is top of wi_vals, map to bottom of canvas
+      surfCtx.fillRect(
+        PAD.left + j * cellW,
+        PAD.top  + (n - 1 - i) * cellH,
+        cellW + 1, cellH + 1
+      );
+    }
+  }
+
+  // Map value → pixel helpers
+  const wi_min = data.wi_vals[0], wi_max = data.wi_vals[data.wi_vals.length - 1];
+  const wj_min = data.wj_vals[0], wj_max = data.wj_vals[data.wj_vals.length - 1];
+  const toX = v => PAD.left + (v - wj_min) / (wj_max - wj_min) * plotW;
+  const toY = v => PAD.top  + (1 - (v - wi_min) / (wi_max - wi_min)) * plotH;
+
+  // Draw optimizer trajectory
+  const ti = data.traj_i, tj = data.traj_j;
+  if (ti.length > 1) {
+    surfCtx.strokeStyle = OPT_COLORS[currentOpt];
+    surfCtx.lineWidth   = 2;
+    surfCtx.lineJoin    = 'round';
+    surfCtx.beginPath();
+    surfCtx.moveTo(toX(tj[0]), toY(ti[0]));
+    ti.forEach((v, k) => surfCtx.lineTo(toX(tj[k]), toY(v)));
+    surfCtx.stroke();
+
+    // Start dot (white)
+    surfCtx.fillStyle = '#ffffff';
+    surfCtx.beginPath();
+    surfCtx.arc(toX(tj[0]), toY(ti[0]), 4, 0, Math.PI * 2);
+    surfCtx.fill();
+
+    // Current position dot (optimizer colour)
+    const last = ti.length - 1;
+    surfCtx.fillStyle = OPT_COLORS[currentOpt];
+    surfCtx.strokeStyle = '#fff';
+    surfCtx.lineWidth = 1.5;
+    surfCtx.beginPath();
+    surfCtx.arc(toX(tj[last]), toY(ti[last]), 6, 0, Math.PI * 2);
+    surfCtx.fill();
+    surfCtx.stroke();
+  }
+
+  // Axes labels
+  surfCtx.fillStyle = '#6b7399';
+  surfCtx.font = '10px monospace';
+  surfCtx.fillText(data.wj_label.split('(')[0].trim(), PAD.left, H - 6);   // X axis label
+  surfCtx.save();
+  surfCtx.translate(12, PAD.top + plotH / 2);
+  surfCtx.rotate(-Math.PI / 2);
+  surfCtx.fillText(data.wi_label.split('(')[0].trim(), 0, 0);               // Y axis label
+  surfCtx.restore();
+
+  // Axis ticks
+  surfCtx.fillStyle = '#4a5080';
+  surfCtx.font = '9px monospace';
+  [0, 0.5, 1].forEach(t => {
+    const xv = wi_min + t * (wi_max - wi_min);
+    const yv = wj_min + t * (wj_max - wj_min);
+    surfCtx.fillText(xv.toFixed(2), PAD.left - 38, toY(xv) + 3);
+    surfCtx.fillText(yv.toFixed(2), toX(yv) - 12, PAD.top + plotH + 14);
+  });
+}
+
+// ── Loss chart ────────────────────────────────────────────────────────────────
+const lossChart = new Chart(document.getElementById('lossCanvas'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [{
+      label: 'MSE Loss',
+      data: [],
+      borderColor: OPT_COLORS.sgd,
+      borderWidth: 2,
+      fill: true,
+      backgroundColor: 'rgba(255,92,92,0.08)',
+      pointRadius: 0,
+      tension: 0.3,
+    }]
+  },
+  options: {
+    animation: false,
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: {
+        title: { display: true, text: 'Epoch', color: '#4a5080' },
+        ticks: { maxTicksLimit: 10 },
+      },
+      y: {
+        title: { display: true, text: 'MSE Loss', color: '#4a5080' },
+        beginAtZero: false,
+      }
+    },
+    plugins: { legend: { display: false } }
+  }
+});
+
+// ── Scatter chart (true vs predicted) ────────────────────────────────────────
+const scatterChart = new Chart(document.getElementById('scatterCanvas'), {
+  type: 'scatter',
+  data: {
+    datasets: [
+      {
+        label: 'Predictions',
+        data: [],
+        backgroundColor: 'rgba(165,180,252,0.5)',
+        pointRadius: 3,
+      },
+      {
+        // Perfect prediction diagonal line
+        label: 'Perfect fit',
+        data: [{ x: -3, y: -3 }, { x: 3, y: 3 }],
+        type: 'line',
+        borderColor: 'rgba(255,255,255,0.2)',
+        borderWidth: 1,
+        borderDash: [4, 4],
+        pointRadius: 0,
+        fill: false,
+      }
+    ]
+  },
+  options: {
+    animation: false,
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'True value (standardized)', color: '#4a5080' } },
+      y: { title: { display: true, text: 'Predicted value (standardized)', color: '#4a5080' } },
+    },
+    plugins: { legend: { display: false } }
+  }
+});
+
+// ── Weight evolution chart ────────────────────────────────────────────────────
+// We show all 25 weights — one thin line each
+const NUM_WEIGHTS = 25;
+const weightChart = new Chart(document.getElementById('weightCanvas'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: Array.from({ length: NUM_WEIGHTS }, (_, i) => ({
+      label: `w${i}`,
+      data: [],
+      borderColor: `hsl(${(i * 360 / NUM_WEIGHTS) | 0}, 65%, 60%)`,
+      borderWidth: 1,
+      pointRadius: 0,
+      tension: 0.2,
+      fill: false,
+    }))
+  },
+  options: {
+    animation: false,
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'Step', color: '#4a5080' }, ticks: { maxTicksLimit: 10 } },
+      y: { title: { display: true, text: 'Weight value', color: '#4a5080' } },
+    },
+    plugins: { legend: { display: false } }
+  }
+});
+
+// ── Populate weight dropdowns ─────────────────────────────────────────────────
+function populateWeightDropdowns(labels) {
+  const wiSel = document.getElementById('wi_sel');
+  const wjSel = document.getElementById('wj_sel');
+  wiSel.innerHTML = '';
+  wjSel.innerHTML = '';
+  labels.forEach((lbl, i) => {
+    wiSel.innerHTML += `<option value="${i}">${i}: ${lbl}</option>`;
+    wjSel.innerHTML += `<option value="${i}">${i}: ${lbl}</option>`;
+  });
+  wjSel.value = '1';   // default: weight 0 vs weight 1
+}
+
+// ── Update weight log (real-time sidebar) ─────────────────────────────────────
+function updateWeightLog(values, labels) {
+  const log = document.getElementById('weightLog');
+  // Show first 12 weights to keep it readable
+  log.innerHTML = values.slice(0, 12).map((v, i) =>
+    `${labels[i].split(' ')[0].padEnd(12)} = ${v >= 0 ? ' ' : ''}${v.toFixed(5)}`
+  ).join('\n') + '\n... (25 total)';
+  log.scrollTop = log.scrollTop;  // keep scroll position
+}
+
+// ── Update all charts from step response ─────────────────────────────────────
+function applyStepData(data) {
+  // Stat cards
+  document.getElementById('statEpoch').textContent = data.epoch;
+  document.getElementById('statLoss').textContent  = data.loss.toFixed(5);
+
+  // Loss curve
+  lossChart.data.labels   = data.loss_history.map((_, i) => i);
+  lossChart.data.datasets[0].data        = data.loss_history;
+  lossChart.data.datasets[0].borderColor = OPT_COLORS[currentOpt];
+  lossChart.data.datasets[0].backgroundColor = OPT_COLORS[currentOpt] + '18';
+  lossChart.update();
+
+  // Scatter
+  const sc = data.scatter;
+  scatterChart.data.datasets[0].data = sc.y_true.map((t, i) => ({ x: t, y: sc.y_pred[i] }));
+  scatterChart.data.datasets[0].backgroundColor = OPT_COLORS[currentOpt] + '80';
+  scatterChart.update();
+
+  // Weight evolution
+  const wv = data.weights.values;
+  weightHistory.push(wv);
+  const steps = weightHistory.length;
+  weightChart.data.labels = Array.from({ length: steps }, (_, i) => i);
+  weightChart.data.datasets.forEach((ds, i) => {
+    ds.data = weightHistory.map(w => w[i]);
+  });
+  weightChart.update();
+
+  // Real-time weight log
+  updateWeightLog(wv, data.weights.labels);
+
+  // If surface was computed before, refresh it with new trajectory
+  if (currentSurface) {
+    fetchSurface();
+  }
+}
+
+// ── API: step ─────────────────────────────────────────────────────────────────
+async function doStep() {
+  const epochs = parseInt(document.getElementById('epochStep').value);
+  try {
+    const r = await fetch('/api/step', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ epochs })
+    });
+    const data = await r.json();
+    applyStepData(data);
+  } catch (e) {
+    console.error('Step failed:', e);
+    document.getElementById('statusText').textContent = 'Error — see console';
+  }
+}
+
+// ── API: surface ──────────────────────────────────────────────────────────────
+async function fetchSurface() {
+  const wi = parseInt(document.getElementById('wi_sel').value);
+  const wj = parseInt(document.getElementById('wj_sel').value);
+  if (wi === wj) { alert('Please select two DIFFERENT weights.'); return; }
+
+  document.getElementById('statusText').textContent = 'Computing surface…';
+  try {
+    const r = await fetch('/api/surface', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weight_i: wi, weight_j: wj })
+    });
+    const data = await r.json();
+    drawSurface(data);
+    document.getElementById('statusText').textContent = 'Surface ready';
+  } catch (e) {
+    console.error('Surface failed:', e);
+    document.getElementById('statusText').textContent = 'Surface error';
+  }
+}
+
+// ── API: reset ────────────────────────────────────────────────────────────────
+async function doReset() {
+  stopTraining();
+  lossHistory  = [];
+  weightHistory = [];
+  currentSurface = null;
+  surfCtx.clearRect(0, 0, surfaceCanvas.width, surfaceCanvas.height);
+  lossChart.data.labels = [];
+  lossChart.data.datasets[0].data = [];
+  lossChart.update();
+  scatterChart.data.datasets[0].data = [];
+  scatterChart.update();
+  weightChart.data.labels = [];
+  weightChart.data.datasets.forEach(ds => ds.data = []);
+  weightChart.update();
+  document.getElementById('statEpoch').textContent = '0';
+  document.getElementById('statLoss').textContent  = '—';
+  document.getElementById('weightLog').textContent = 'Waiting for training to start...';
+
+  const lr = getLR();
+  await fetch('/api/reset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ optimizer: currentOpt, lr })
+  });
+  document.getElementById('statusText').textContent = `Reset — ${currentOpt.toUpperCase()} @ lr=${lr}`;
+}
+
+// ── Training loop ─────────────────────────────────────────────────────────────
+function startTraining() {
+  if (isTraining) return;
+  isTraining = true;
+  document.getElementById('btnTrain').textContent = '⏸ Pause';
+  document.getElementById('statusText').textContent = `Training with ${currentOpt.toUpperCase()}…`;
+
+  async function loop() {
+    if (!isTraining) return;
+    await doStep();
+    trainHandle = setTimeout(loop, 80);  // ~12 steps/second
+  }
+  loop();
+}
+
+function stopTraining() {
+  isTraining = false;
+  clearTimeout(trainHandle);
+  document.getElementById('btnTrain').textContent = '▶ Start Training';
+  document.getElementById('statusText').textContent = 'Paused';
+}
+
+// ── LR helper ─────────────────────────────────────────────────────────────────
+function getLR() {
+  const v = parseFloat(document.getElementById('lrSlider').value);
+  return parseFloat(Math.pow(10, v).toFixed(6));
+}
+
+// ── Event listeners ───────────────────────────────────────────────────────────
+
+// Optimizer cards
+document.querySelectorAll('.opt-card').forEach(card => {
+  card.addEventListener('click', async () => {
+    document.querySelectorAll('.opt-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+    currentOpt = card.dataset.opt;
+    document.getElementById('statOpt').textContent = currentOpt.toUpperCase();
+    await doReset();
+  });
+});
+
+// Learning rate slider
+document.getElementById('lrSlider').addEventListener('input', function () {
+  const lr = getLR();
+  document.getElementById('lrDisplay').textContent = lr < 0.001 ? lr.toExponential(1) : lr.toFixed(4);
+  document.getElementById('statLR').textContent    = lr < 0.001 ? lr.toExponential(1) : lr.toFixed(4);
+});
+
+// Buttons
+document.getElementById('btnTrain').addEventListener('click', () => {
+  isTraining ? stopTraining() : startTraining();
+});
+
+document.getElementById('btnStep').addEventListener('click', async () => {
+  if (isTraining) return;
+  await doStep();
+  document.getElementById('statusText').textContent = 'Step done';
+});
+
+document.getElementById('btnReset').addEventListener('click', doReset);
+
+document.getElementById('btnSurface').addEventListener('click', fetchSurface);
+
+// ── Initialise page ───────────────────────────────────────────────────────────
+async function init() {
+  document.getElementById('statusText').textContent = 'Loading dataset info…';
+  try {
+    const r    = await fetch('/api/info');
+    const info = await r.json();
+    weightLabels = info.weight_labels;
+    populateWeightDropdowns(weightLabels);
+    document.getElementById('statusText').textContent =
+      `Ready · ${info.n_samples} samples · ${info.weight_labels.length} trainable weights`;
+  } catch (e) {
+    document.getElementById('statusText').textContent = 'Failed to connect to Flask server';
+  }
+}
+
+init();
+</script>
+</body>
+</html>
